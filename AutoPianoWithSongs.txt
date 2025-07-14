@@ -1,0 +1,152 @@
+-- Services
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Main GUI
+local screenGui = Instance.new("ScreenGui", playerGui)
+screenGui.Name = "AutoPianoPlayerGui"
+screenGui.ResetOnSpawn = false
+
+local mainFrame = Instance.new("Frame", screenGui)
+mainFrame.Size = UDim2.new(0, 320, 0, 400)
+mainFrame.Position = UDim2.new(0.5, -160, 0.5, -200)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+
+-- Title
+local title = Instance.new("TextLabel", mainFrame)
+title.Size = UDim2.new(1, 0, 0, 40)
+title.BackgroundTransparency = 1
+title.Text = "Auto Piano Player"
+title.TextColor3 = Color3.new(1, 1, 1)
+title.Font = Enum.Font.SourceSansBold
+title.TextSize = 24
+
+-- Instructions
+local instr = Instance.new("TextLabel", mainFrame)
+instr.Size = UDim2.new(1, -20, 0, 40)
+instr.Position = UDim2.new(0, 10, 0, 40)
+instr.BackgroundTransparency = 1
+instr.Text = "Chat input blocked while playing"
+instr.TextColor3 = Color3.new(1, 1, 1)
+instr.Font = Enum.Font.SourceSans
+instr.TextSize = 16
+instr.TextWrapped = true
+
+-- Songs data: key = song name, value = list of notes with key and timestamp (seconds)
+local songs = {
+    ["Moonlight Sonata 3rd Movement"] = {
+        {key = "A", time = 0},
+        {key = "S", time = 0.3},
+        {key = "D", time = 0.5},
+        {key = "F", time = 0.8},
+        {key = "G", time = 1.2},
+        {key = "H", time = 1.5},
+        {key = "J", time = 1.7},
+        -- (This is a shortened example, add full notes yourself)
+    },
+    ["Golden Hour"] = {
+        {key = "W", time = 0},
+        {key = "E", time = 0.5},
+        {key = "R", time = 1.0},
+        {key = "T", time = 1.6},
+        -- Short example
+    },
+}
+
+local playing = false
+local currentCoroutine
+
+-- Function to simulate key press
+local function pressKey(key)
+    -- UserInputService:SetKeyDown / SetKeyUp might not work in all executors or games.
+    -- Alternative: firegameevent or whatever the piano game uses.
+    -- For example, send key to game with this basic method:
+    local VirtualInputManager = game:GetService("VirtualInputManager")
+    VirtualInputManager:SendKeyEvent(true, key, false, game)
+    wait(0.05)
+    VirtualInputManager:SendKeyEvent(false, key, false, game)
+end
+
+-- Block chat input
+local blockConnection
+local function blockChatInput(enable)
+    if enable then
+        blockConnection = UserInputService.TextBoxFocused:Connect(function()
+            if playing then
+                -- Kick focus away from chat box while playing
+                playerGui:SetCoreGuiEnabled(Enum.CoreGuiType.Chat, false)
+            end
+        end)
+        playerGui:SetCoreGuiEnabled(Enum.CoreGuiType.Chat, false)
+    else
+        if blockConnection then
+            blockConnection:Disconnect()
+            blockConnection = nil
+        end
+        playerGui:SetCoreGuiEnabled(Enum.CoreGuiType.Chat, true)
+    end
+end
+
+local function playSong(song)
+    playing = true
+    blockChatInput(true)
+    local startTime = tick()
+    for i, note in ipairs(song) do
+        if not playing then break end
+        local now = tick()
+        local waitTime = note.time - (now - startTime)
+        if waitTime > 0 then wait(waitTime) end
+        pressKey(note.key)
+    end
+    blockChatInput(false)
+    playing = false
+end
+
+local function stopPlaying()
+    playing = false
+    blockChatInput(false)
+end
+
+-- Buttons
+local buttonY = 90
+for songName, _ in pairs(songs) do
+    local btn = Instance.new("TextButton", mainFrame)
+    btn.Size = UDim2.new(1, -20, 0, 40)
+    btn.Position = UDim2.new(0, 10, 0, buttonY)
+    btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.Font = Enum.Font.SourceSansBold
+    btn.TextSize = 20
+    btn.Text = "Play: "..songName
+    btn.AutoButtonColor = true
+
+    btn.MouseButton1Click:Connect(function()
+        if playing then stopPlaying() end
+        currentCoroutine = coroutine.create(function()
+            playSong(songs[songName])
+        end)
+        coroutine.resume(currentCoroutine)
+    end)
+    buttonY = buttonY + 50
+end
+
+-- Stop button
+local stopBtn = Instance.new("TextButton", mainFrame)
+stopBtn.Size = UDim2.new(1, -20, 0, 40)
+stopBtn.Position = UDim2.new(0, 10, 0, buttonY)
+stopBtn.BackgroundColor3 = Color3.fromRGB(150, 20, 20)
+stopBtn.TextColor3 = Color3.new(1, 1, 1)
+stopBtn.Font = Enum.Font.SourceSansBold
+stopBtn.TextSize = 20
+stopBtn.Text = "Stop"
+
+stopBtn.MouseButton1Click:Connect(function()
+    stopPlaying()
+end)
