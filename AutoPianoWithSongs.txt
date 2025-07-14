@@ -1,145 +1,206 @@
 -- Services
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
+local VirtualInputManager = game:GetService("VirtualInputManager") -- exploit only
+local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
+local mouse = player:GetMouse()
 
--- GUI setup
-local screenGui = Instance.new("ScreenGui", playerGui)
-screenGui.Name = "AutoPianoPlayerGui"
-screenGui.ResetOnSpawn = false
+-- Table of piano keys to their GUI buttons (to be filled dynamically)
+local pianoKeys = {}
 
-local mainFrame = Instance.new("Frame", screenGui)
-mainFrame.Size = UDim2.new(0, 350, 0, 420)
-mainFrame.Position = UDim2.new(0.5, -175, 0.5, -210)
-mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-mainFrame.BorderSizePixel = 0
-mainFrame.Active = true
-mainFrame.Draggable = true
-
--- Title
-local title = Instance.new("TextLabel", mainFrame)
-title.Size = UDim2.new(1, 0, 0, 40)
-title.BackgroundTransparency = 1
-title.Text = "Auto Piano Player (Letter+Timing)"
-title.TextColor3 = Color3.new(1, 1, 1)
-title.Font = Enum.Font.SourceSansBold
-title.TextSize = 22
-
--- Instruction label
-local instr = Instance.new("TextLabel", mainFrame)
-instr.Size = UDim2.new(1, -20, 0, 40)
-instr.Position = UDim2.new(0, 10, 0, 40)
-instr.BackgroundTransparency = 1
-instr.Text = "Chat input blocked while playing"
-instr.TextColor3 = Color3.new(1, 1, 1)
-instr.Font = Enum.Font.SourceSans
-instr.TextSize = 16
-instr.TextWrapped = true
-
--- Songs data, each song is {notes = "ASDF", timings = {0.5, 0.3, 0.7, 0.4}}
+-- Song data example: each entry is {key = "C4", delay = 0.5} (delay in seconds after previous note)
+-- You will need to fill this according to the piano keys and rhythm
 local songs = {
-    ["Moonlight Sonata 3rd"] = {
-        notes = "ASDFGHJ",
-        timings = {0.3, 0.2, 0.5, 0.4, 0.6, 0.3, 0.4}
-    },
-    ["Golden Hour"] = {
-        notes = "WERTE",
-        timings = {0.4, 0.6, 0.5, 0.7, 0.3}
+    ["ExampleSong"] = {
+        {key = "C4", delay = 0.5},
+        {key = "D4", delay = 0.5},
+        {key = "E4", delay = 0.5},
+        {key = "F4", delay = 0.5},
+        {key = "G4", delay = 1},
+        {key = "F4", delay = 0.5},
+        {key = "E4", delay = 0.5},
+        {key = "D4", delay = 0.5},
+        {key = "C4", delay = 1},
     }
 }
 
-local playing = false
-local currentCoroutine
+-- Flag for auto-playing
+local isPlaying = false
 
--- Function to press and release key using VirtualInputManager
-local function pressKey(key)
-    if not VirtualInputManager then return end
-    VirtualInputManager:SendKeyEvent(true, key, false, game)
-    wait(0.05)
-    VirtualInputManager:SendKeyEvent(false, key, false, game)
-end
-
--- Block chat input
-local blockConnection
-local function blockChatInput(enable)
-    if enable then
-        blockConnection = UserInputService.TextBoxFocused:Connect(function()
-            if playing then
-                playerGui:SetCoreGuiEnabled(Enum.CoreGuiType.Chat, false)
+-- Helper function: find piano keys GUI buttons by scanning the screen
+local function findPianoKeys()
+    -- Adjust this path based on Digital Piano GUI structure
+    local pianoGui = playerGui:FindFirstChild("PianoGui") or playerGui:FindFirstChild("DigitalPianoGui") or playerGui -- fallback
+    
+    -- You need to explore the real game structure with an explorer to get exact path
+    -- For example, keys might be under pianoGui.Keys or similar
+    
+    -- For demonstration, scan all descendants for buttons named like keys (e.g., "C4", "D4", ...)
+    for _, obj in pairs(pianoGui:GetDescendants()) do
+        if obj:IsA("TextButton") or obj:IsA("ImageButton") then
+            local name = obj.Name
+            if songs["ExampleSong"][1] and name == songs["ExampleSong"][1].key then
+                -- Just test if key found
+                pianoKeys[name] = obj
             end
-        end)
-        playerGui:SetCoreGuiEnabled(Enum.CoreGuiType.Chat, false)
-    else
-        if blockConnection then
-            blockConnection:Disconnect()
-            blockConnection = nil
         end
-        playerGui:SetCoreGuiEnabled(Enum.CoreGuiType.Chat, true)
     end
+    
+    -- You must adjust above or hardcode keys manually if game uses different names
 end
 
--- Play song function
-local function playSong(song)
-    playing = true
-    blockChatInput(true)
-
-    local notes = song.notes
-    local timings = song.timings
-
-    for i = 1, #notes do
-        if not playing then break end
-        local key = notes:sub(i, i)
-        pressKey(key)
-        local waitTime = timings[i] or 0.4
-        wait(waitTime)
-    end
-
-    blockChatInput(false)
-    playing = false
+-- Function to click a GUI button at its absolute center position
+local function clickGuiButton(guiButton)
+    if not guiButton or not guiButton.AbsolutePosition then return end
+    
+    local pos = guiButton.AbsolutePosition
+    local size = guiButton.AbsoluteSize
+    local x = pos.X + size.X / 2
+    local y = pos.Y + size.Y / 2
+    
+    -- Simulate mouse down
+    VirtualInputManager:SendMouseButtonEvent(x, y, true, game)
+    wait(0.05)
+    -- Simulate mouse up
+    VirtualInputManager:SendMouseButtonEvent(x, y, false, game)
 end
 
+-- Function to play a song by clicking keys in sequence with delays
+local function playSong(songName)
+    local song = songs[songName]
+    if not song then return end
+    
+    isPlaying = true
+    
+    for i, note in ipairs(song) do
+        if not isPlaying then break end
+        
+        local keyBtn = pianoKeys[note.key]
+        if keyBtn then
+            clickGuiButton(keyBtn)
+        end
+        
+        wait(note.delay or 0.5)
+    end
+    
+    isPlaying = false
+end
+
+-- Function to stop playing
 local function stopPlaying()
-    playing = false
-    blockChatInput(false)
+    isPlaying = false
 end
 
--- Buttons setup
-local buttonY = 90
-for songName, _ in pairs(songs) do
-    local btn = Instance.new("TextButton", mainFrame)
-    btn.Size = UDim2.new(1, -20, 0, 40)
-    btn.Position = UDim2.new(0, 10, 0, buttonY)
-    btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-    btn.TextColor3 = Color3.new(1, 1, 1)
-    btn.Font = Enum.Font.SourceSansBold
-    btn.TextSize = 20
-    btn.Text = "Play: "..songName
-    btn.AutoButtonColor = true
+-- GUI setup
 
-    btn.MouseButton1Click:Connect(function()
-        if playing then stopPlaying() end
-        currentCoroutine = coroutine.create(function()
-            playSong(songs[songName])
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AutoPianoGui"
+screenGui.Parent = playerGui
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 250, 0, 140)
+frame.Position = UDim2.new(0, 50, 0, 50)
+frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
+frame.BorderSizePixel = 0
+frame.Parent = screenGui
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 30)
+title.BackgroundTransparency = 1
+title.Text = "Auto Piano Player"
+title.TextColor3 = Color3.new(1,1,1)
+title.Font = Enum.Font.SourceSansBold
+title.TextSize = 20
+title.Parent = frame
+
+local dropdown = Instance.new("TextButton")
+dropdown.Size = UDim2.new(1, -20, 0, 30)
+dropdown.Position = UDim2.new(0, 10, 0, 40)
+dropdown.BackgroundColor3 = Color3.fromRGB(50,50,50)
+dropdown.TextColor3 = Color3.new(1,1,1)
+dropdown.Font = Enum.Font.SourceSans
+dropdown.TextSize = 18
+dropdown.Text = "Select Song"
+dropdown.Parent = frame
+
+local songListFrame = Instance.new("Frame")
+songListFrame.Size = UDim2.new(1, 0, 0, 100)
+songListFrame.Position = UDim2.new(0, 0, 0, 75)
+songListFrame.BackgroundColor3 = Color3.fromRGB(40,40,40)
+songListFrame.BorderSizePixel = 0
+songListFrame.ClipsDescendants = true
+songListFrame.Visible = false
+songListFrame.Parent = frame
+
+local uiLayout = Instance.new("UIListLayout")
+uiLayout.Parent = songListFrame
+
+local selectedSong = nil
+
+local function refreshSongList()
+    for _, child in pairs(songListFrame:GetChildren()) do
+        if child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+    for songName,_ in pairs(songs) do
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1, -10, 0, 25)
+        btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        btn.TextColor3 = Color3.new(1,1,1)
+        btn.Font = Enum.Font.SourceSans
+        btn.TextSize = 16
+        btn.Text = songName
+        btn.Parent = songListFrame
+        
+        btn.MouseButton1Click:Connect(function()
+            selectedSong = songName
+            dropdown.Text = songName
+            songListFrame.Visible = false
         end)
-        coroutine.resume(currentCoroutine)
-    end)
-    buttonY = buttonY + 50
+    end
 end
+refreshSongList()
 
--- Stop button
-local stopBtn = Instance.new("TextButton", mainFrame)
-stopBtn.Size = UDim2.new(1, -20, 0, 40)
-stopBtn.Position = UDim2.new(0, 10, 0, buttonY)
-stopBtn.BackgroundColor3 = Color3.fromRGB(150, 20, 20)
-stopBtn.TextColor3 = Color3.new(1, 1, 1)
+dropdown.MouseButton1Click:Connect(function()
+    songListFrame.Visible = not songListFrame.Visible
+end)
+
+local playBtn = Instance.new("TextButton")
+playBtn.Size = UDim2.new(1, -20, 0, 30)
+playBtn.Position = UDim2.new(0, 10, 0, 180)
+playBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+playBtn.TextColor3 = Color3.new(1,1,1)
+playBtn.Font = Enum.Font.SourceSansBold
+playBtn.TextSize = 20
+playBtn.Text = "Play"
+playBtn.Parent = frame
+
+local stopBtn = Instance.new("TextButton")
+stopBtn.Size = UDim2.new(1, -20, 0, 30)
+stopBtn.Position = UDim2.new(0, 10, 0, 220)
+stopBtn.BackgroundColor3 = Color3.fromRGB(100, 40, 40)
+stopBtn.TextColor3 = Color3.new(1,1,1)
 stopBtn.Font = Enum.Font.SourceSansBold
 stopBtn.TextSize = 20
 stopBtn.Text = "Stop"
+stopBtn.Parent = frame
+
+playBtn.MouseButton1Click:Connect(function()
+    if selectedSong then
+        findPianoKeys()
+        coroutine.wrap(function()
+            playSong(selectedSong)
+        end)()
+    end
+end)
 
 stopBtn.MouseButton1Click:Connect(function()
     stopPlaying()
 end)
+
+-- Optional: Disable chat while playing (can be added later if you want)
+
