@@ -2,18 +2,19 @@
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- Main GUI
+-- GUI setup
 local screenGui = Instance.new("ScreenGui", playerGui)
 screenGui.Name = "AutoPianoPlayerGui"
 screenGui.ResetOnSpawn = false
 
 local mainFrame = Instance.new("Frame", screenGui)
-mainFrame.Size = UDim2.new(0, 320, 0, 400)
-mainFrame.Position = UDim2.new(0.5, -160, 0.5, -200)
+mainFrame.Size = UDim2.new(0, 350, 0, 420)
+mainFrame.Position = UDim2.new(0.5, -175, 0.5, -210)
 mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
@@ -23,12 +24,12 @@ mainFrame.Draggable = true
 local title = Instance.new("TextLabel", mainFrame)
 title.Size = UDim2.new(1, 0, 0, 40)
 title.BackgroundTransparency = 1
-title.Text = "Auto Piano Player"
+title.Text = "Auto Piano Player (Letter+Timing)"
 title.TextColor3 = Color3.new(1, 1, 1)
 title.Font = Enum.Font.SourceSansBold
-title.TextSize = 24
+title.TextSize = 22
 
--- Instructions
+-- Instruction label
 local instr = Instance.new("TextLabel", mainFrame)
 instr.Size = UDim2.new(1, -20, 0, 40)
 instr.Position = UDim2.new(0, 10, 0, 40)
@@ -39,36 +40,24 @@ instr.Font = Enum.Font.SourceSans
 instr.TextSize = 16
 instr.TextWrapped = true
 
--- Songs data: key = song name, value = list of notes with key and timestamp (seconds)
+-- Songs data, each song is {notes = "ASDF", timings = {0.5, 0.3, 0.7, 0.4}}
 local songs = {
-    ["Moonlight Sonata 3rd Movement"] = {
-        {key = "A", time = 0},
-        {key = "S", time = 0.3},
-        {key = "D", time = 0.5},
-        {key = "F", time = 0.8},
-        {key = "G", time = 1.2},
-        {key = "H", time = 1.5},
-        {key = "J", time = 1.7},
-        -- (This is a shortened example, add full notes yourself)
+    ["Moonlight Sonata 3rd"] = {
+        notes = "ASDFGHJ",
+        timings = {0.3, 0.2, 0.5, 0.4, 0.6, 0.3, 0.4}
     },
     ["Golden Hour"] = {
-        {key = "W", time = 0},
-        {key = "E", time = 0.5},
-        {key = "R", time = 1.0},
-        {key = "T", time = 1.6},
-        -- Short example
-    },
+        notes = "WERTE",
+        timings = {0.4, 0.6, 0.5, 0.7, 0.3}
+    }
 }
 
 local playing = false
 local currentCoroutine
 
--- Function to simulate key press
+-- Function to press and release key using VirtualInputManager
 local function pressKey(key)
-    -- UserInputService:SetKeyDown / SetKeyUp might not work in all executors or games.
-    -- Alternative: firegameevent or whatever the piano game uses.
-    -- For example, send key to game with this basic method:
-    local VirtualInputManager = game:GetService("VirtualInputManager")
+    if not VirtualInputManager then return end
     VirtualInputManager:SendKeyEvent(true, key, false, game)
     wait(0.05)
     VirtualInputManager:SendKeyEvent(false, key, false, game)
@@ -80,7 +69,6 @@ local function blockChatInput(enable)
     if enable then
         blockConnection = UserInputService.TextBoxFocused:Connect(function()
             if playing then
-                -- Kick focus away from chat box while playing
                 playerGui:SetCoreGuiEnabled(Enum.CoreGuiType.Chat, false)
             end
         end)
@@ -94,17 +82,22 @@ local function blockChatInput(enable)
     end
 end
 
+-- Play song function
 local function playSong(song)
     playing = true
     blockChatInput(true)
-    local startTime = tick()
-    for i, note in ipairs(song) do
+
+    local notes = song.notes
+    local timings = song.timings
+
+    for i = 1, #notes do
         if not playing then break end
-        local now = tick()
-        local waitTime = note.time - (now - startTime)
-        if waitTime > 0 then wait(waitTime) end
-        pressKey(note.key)
+        local key = notes:sub(i, i)
+        pressKey(key)
+        local waitTime = timings[i] or 0.4
+        wait(waitTime)
     end
+
     blockChatInput(false)
     playing = false
 end
@@ -114,7 +107,7 @@ local function stopPlaying()
     blockChatInput(false)
 end
 
--- Buttons
+-- Buttons setup
 local buttonY = 90
 for songName, _ in pairs(songs) do
     local btn = Instance.new("TextButton", mainFrame)
