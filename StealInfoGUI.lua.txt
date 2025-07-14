@@ -1,0 +1,300 @@
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Main GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "CreepyInfoGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 300, 0, 130)
+mainFrame.Position = UDim2.new(0.5, -150, 0.5, -65)
+mainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = screenGui
+
+-- Make mainFrame draggable
+local dragging = false
+local dragInput
+local dragStart
+local startPos
+
+local function update(input)
+    local delta = input.Position - dragStart
+    mainFrame.Position = UDim2.new(
+        startPos.X.Scale,
+        startPos.X.Offset + delta.X,
+        startPos.Y.Scale,
+        startPos.Y.Offset + delta.Y
+    )
+end
+
+mainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+mainFrame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        update(input)
+    end
+end)
+
+-- Title
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 30)
+title.BackgroundTransparency = 1
+title.Text = "Steal Info GUI"
+title.TextColor3 = Color3.new(1, 1, 1)
+title.Font = Enum.Font.SourceSansBold
+title.TextSize = 22
+title.Parent = mainFrame
+
+-- Dropdown to pick player
+local dropdown = Instance.new("TextButton")
+dropdown.Size = UDim2.new(1, -20, 0, 30)
+dropdown.Position = UDim2.new(0, 10, 0, 40)
+dropdown.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+dropdown.TextColor3 = Color3.new(1, 1, 1)
+dropdown.Font = Enum.Font.SourceSans
+dropdown.TextSize = 18
+dropdown.Text = "Select Player"
+dropdown.Parent = mainFrame
+
+local dropdownList = Instance.new("Frame")
+dropdownList.Size = UDim2.new(1, 0, 0, 150)
+dropdownList.Position = UDim2.new(0, 0, 0, 70)
+dropdownList.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+dropdownList.BorderSizePixel = 0
+dropdownList.ClipsDescendants = true
+dropdownList.Visible = false
+dropdownList.Parent = mainFrame
+
+local uiListLayout = Instance.new("UIListLayout")
+uiListLayout.Parent = dropdownList
+uiListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+local selectedPlayer = nil
+
+-- Populate dropdown list with players
+local function refreshPlayerList()
+    for _, child in pairs(dropdownList:GetChildren()) do
+        if child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+    for i, plr in pairs(Players:GetPlayers()) do
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1, -10, 0, 25)
+        btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        btn.TextColor3 = Color3.new(1, 1, 1)
+        btn.Font = Enum.Font.SourceSans
+        btn.TextSize = 16
+        btn.Text = plr.Name
+        btn.Parent = dropdownList
+
+        btn.MouseButton1Click:Connect(function()
+            selectedPlayer = plr
+            dropdown.Text = plr.Name
+            dropdownList.Visible = false
+        end)
+    end
+end
+
+refreshPlayerList()
+
+dropdown.MouseButton1Click:Connect(function()
+    dropdownList.Visible = not dropdownList.Visible
+end)
+
+Players.PlayerAdded:Connect(refreshPlayerList)
+Players.PlayerRemoving:Connect(refreshPlayerList)
+
+-- Steal Info button
+local stealButton = Instance.new("TextButton")
+stealButton.Size = UDim2.new(1, -20, 0, 30)
+stealButton.Position = UDim2.new(0, 10, 0, 225)
+stealButton.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+stealButton.TextColor3 = Color3.new(1, 1, 1)
+stealButton.Font = Enum.Font.SourceSansBold
+stealButton.TextSize = 20
+stealButton.Text = "Steal Info"
+stealButton.Parent = mainFrame
+
+-- Notification GUI (bottom right)
+local notifyGui = Instance.new("ScreenGui")
+notifyGui.Name = "NotifyGui"
+notifyGui.ResetOnSpawn = false
+notifyGui.Parent = playerGui
+
+local notifyFrame = Instance.new("Frame")
+notifyFrame.Size = UDim2.new(0, 300, 0, 110)
+notifyFrame.Position = UDim2.new(1, -310, 1, -120)
+notifyFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+notifyFrame.BorderSizePixel = 0
+notifyFrame.Visible = false
+notifyFrame.Parent = notifyGui
+
+local notifyText = Instance.new("TextLabel")
+notifyText.Size = UDim2.new(1, -50, 1, -20)
+notifyText.Position = UDim2.new(0, 10, 0, 10)
+notifyText.BackgroundTransparency = 1
+notifyText.TextColor3 = Color3.new(1, 1, 1)
+notifyText.TextXAlignment = Enum.TextXAlignment.Left
+notifyText.TextYAlignment = Enum.TextYAlignment.Top
+notifyText.TextWrapped = true
+notifyText.Font = Enum.Font.SourceSans
+notifyText.TextSize = 16
+notifyText.Parent = notifyFrame
+
+local copyButton = Instance.new("TextButton")
+copyButton.Size = UDim2.new(0, 40, 0, 25)
+copyButton.Position = UDim2.new(1, -45, 0, 10)
+copyButton.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+copyButton.TextColor3 = Color3.new(1, 1, 1)
+copyButton.Font = Enum.Font.SourceSansBold
+copyButton.TextSize = 16
+copyButton.Text = "Copy"
+copyButton.Parent = notifyFrame
+
+local function formatTime(seconds)
+    local mins = math.floor(seconds / 60)
+    local secs = seconds % 60
+    return string.format("%02d:%02d", mins, secs)
+end
+
+local function getPlayerInfo(plr)
+    if not plr then return "No player selected." end
+
+    -- Username and UserId
+    local username = plr.Name
+    local userId = plr.UserId
+
+    -- Account age in days
+    local accountAge = plr.AccountAge or 0
+
+    -- Premium status
+    local isPremium = plr.MembershipType == Enum.MembershipType.Premium
+
+    -- Accessories
+    local accessories = {}
+    if plr.Character then
+        for _, item in pairs(plr.Character:GetChildren()) do
+            if item:IsA("Accessory") then
+                table.insert(accessories, item.Name)
+            end
+        end
+    end
+    local accessoryStr = #accessories > 0 and table.concat(accessories, ", ") or "None"
+
+    -- Team
+    local teamName = plr.Team and plr.Team.Name or "No Team"
+
+    -- Health and max health
+    local humanoid = plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
+    local health = humanoid and math.floor(humanoid.Health) or "N/A"
+    local maxHealth = humanoid and math.floor(humanoid.MaxHealth) or "N/A"
+
+    -- Friend count
+    local friendCount = 0
+    local success, result = pcall(function()
+        friendCount = #plr:GetFriendsOnline() or 0
+    end)
+
+    -- Admin detection (basic)
+    local isAdmin = false
+    local userIdAdminList = {
+        1, -- Roblox's own account
+        -- Add other known admin userIds if you want
+    }
+    for _, adminId in pairs(userIdAdminList) do
+        if userId == adminId then
+            isAdmin = true
+            break
+        end
+    end
+
+    -- Play time (in this game session)
+    local playTime = 0
+    local leaderstats = plr:FindFirstChild("leaderstats")
+    if leaderstats then
+        local timeStat = leaderstats:FindFirstChild("TimePlayed")
+        if timeStat and timeStat:IsA("IntValue") then
+            playTime = timeStat.Value
+        end
+    end
+
+    local infoText = 
+        ("Username: %s\nUserId: %d\nAccount Age: %d days\nPremium: %s\nAccessories: %s\nTeam: %s\nHealth: %s / %s\nFriend Count: %d\nAdmin: %s\nPlay Time (s): %d")
+        :format(
+            username,
+            userId,
+            accountAge,
+            isPremium and "Yes" or "No",
+            accessoryStr,
+            teamName,
+            tostring(health),
+            tostring(maxHealth),
+            friendCount,
+            isAdmin and "Yes" or "No",
+            playTime
+        )
+
+    return infoText
+end
+
+local function showNotification(text)
+    notifyText.Text = text
+    notifyFrame.Visible = true
+
+    local displayTime = 10
+    local elapsed = 0
+
+    local conn
+    conn = RunService.Heartbeat:Connect(function(dt)
+        elapsed = elapsed + dt
+        if elapsed >= displayTime then
+            notifyFrame.Visible = false
+            conn:Disconnect()
+        end
+    end)
+end
+
+copyButton.MouseButton1Click:Connect(function()
+    if notifyText.Text and notifyText.Text ~= "" then
+        if setclipboard then
+            setclipboard(notifyText.Text)
+        else
+            print("Clipboard copy not supported in this executor.")
+        end
+    end
+end)
+
+stealButton.MouseButton1Click:Connect(function()
+    if not selectedPlayer then
+        dropdown.Text = "Select Player"
+        return
+    end
+    local info = getPlayerInfo(selectedPlayer)
+    showNotification(info)
+end)
