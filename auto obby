@@ -1,0 +1,68 @@
+-- ClickToMove AI with GUI Toggle (Xeno-ready)
+local Players = game:GetService("Players")
+local PathfindingService = game:GetService("PathfindingService")
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local hrp = character:WaitForChild("HumanoidRootPart")
+local mouse = player:GetMouse()
+
+-- Create GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "ClickToMoveGui"
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(0,150,0,50)
+toggleButton.Position = UDim2.new(0.05,0,0.05,0)
+toggleButton.Text = "AI: OFF"
+toggleButton.BackgroundColor3 = Color3.fromRGB(255,0,0)
+toggleButton.Parent = screenGui
+
+-- AI active flag
+local aiActive = false
+local moving = false
+
+-- Function to move to position
+local function moveTo(position)
+    moving = true
+    local path = PathfindingService:CreatePath({
+        AgentRadius = 2,
+        AgentHeight = 5,
+        AgentCanJump = true,
+        AgentJumpHeight = 10,
+        AgentMaxSlope = 45
+    })
+
+    path:ComputeAsync(hrp.Position, position)
+    local waypoints = path:GetWaypoints()
+
+    for _, wp in ipairs(waypoints) do
+        if not aiActive then break end
+        if wp.Action == Enum.PathWaypointAction.Jump then
+            humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+        end
+        humanoid:MoveTo(wp.Position)
+        humanoid.MoveToFinished:Wait()
+    end
+    moving = false
+end
+
+-- Handle mouse clicks
+mouse.Button1Down:Connect(function()
+    if aiActive and not moving then
+        moveTo(mouse.Hit.Position)
+    end
+end)
+
+-- Toggle button click
+toggleButton.MouseButton1Click:Connect(function()
+    aiActive = not aiActive
+    if aiActive then
+        toggleButton.Text = "AI: ON"
+        toggleButton.BackgroundColor3 = Color3.fromRGB(0,255,0)
+    else
+        toggleButton.Text = "AI: OFF"
+        toggleButton.BackgroundColor3 = Color3.fromRGB(255,0,0)
+    end
+end)
