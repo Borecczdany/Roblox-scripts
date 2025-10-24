@@ -1,0 +1,169 @@
+-- SingleLocalAdminSim.lua
+-- VLOŽIT: StarterPlayerScripts jako LocalScript
+-- Co dělá: vytvoří GUI s tlačítky pro lokální simulace (benigní efekty).
+-- Bezpečnost: pouze lokální efekty, časově omezené.
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ContextActionService = game:GetService("ContextActionService")
+
+local player = Players.LocalPlayer
+local MAX_DURATION = 20 -- maximální povolená doba simulace (sekundy)
+local BLOCK_ACTION_NAME = "LocalSim_BlockInputs"
+
+-- Helpery
+local function safeDuration(n, def)
+    n = tonumber(n) or def
+    if n <= 0 then n = def end
+    if n > MAX_DURATION then n = MAX_DURATION end
+    return n
+end
+
+-- Vytvoří GUI v PlayerGui
+local function createGui()
+    local pg = player:WaitForChild("PlayerGui")
+    if pg:FindFirstChild("LocalAdminSimGUI") then
+        pg.LocalAdminSimGUI:Destroy()
+    end
+
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "LocalAdminSimGUI"
+    screenGui.ResetOnSpawn = false
+    screenGui.IgnoreGuiInset = true
+    screenGui.Parent = pg
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 320, 0, 140)
+    frame.Position = UDim2.new(0, 20, 0, 20)
+    frame.BackgroundTransparency = 0.15
+    frame.BorderSizePixel = 0
+    frame.Parent = screenGui
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -12, 0, 28)
+    title.Position = UDim2.new(0, 6, 0, 6)
+    title.BackgroundTransparency = 1
+    title.Text = "Local Admin Sim (benign)"
+    title.Font = Enum.Font.GothamBold
+    title.TextScaled = true
+    title.Parent = frame
+
+    local function makeButton(name, posY, text)
+        local btn = Instance.new("TextButton")
+        btn.Name = name
+        btn.Size = UDim2.new(0, 150, 0, 34)
+        btn.Position = UDim2.new(0, 8, 0, posY)
+        btn.Text = text
+        btn.Font = Enum.Font.Gotham
+        btn.TextScaled = true
+        btn.Parent = frame
+        return btn
+    end
+
+    local flashBtn = makeButton("FlashBtn", 40, "Flash (3s)")
+    local spinBtn  = makeButton("SpinBtn", 80, "Camera Spin (6s)")
+    local blockBtn = makeButton("BlockBtn", 40, "Block Input (6s)")
+    blockBtn.Position = UDim2.new(0, 162, 0, 40)
+
+    local stopBtn = makeButton("StopBtn", 80, "STOP (remove)")
+    stopBtn.Position = UDim2.new(0, 162, 0, 80)
+
+    -- tlačítka eventy
+    flashBtn.MouseButton1Click:Connect(function()
+        runFlash(3)
+    end)
+    spinBtn.MouseButton1Click:Connect(function()
+        runCameraSpin(6)
+    end)
+    blockBtn.MouseButton1Click:Connect(function()
+        runBlockInput(6)
+    end)
+    stopBtn.MouseButton1Click:Connect(function()
+        pcall(function() screenGui:Destroy() end)
+    end)
+end
+
+-- Efekt: blikání obrazovky po dobu duration
+local flashConn
+function runFlash(duration)
+    duration = safeDuration(duration, 3)
+    local pg = player:WaitForChild("PlayerGui")
+    local overlay = Instance.new("Frame")
+    overlay.Name = "LocalSimFlashOverlay"
+    overlay.Size = UDim2.new(1,0,1,0)
+    overlay.Position = UDim2.new(0,0,0,0)
+    overlay.BorderSizePixel = 0
+    overlay.BackgroundTransparency = 1
+    overlay.Parent = pg.LocalAdminSimGUI or pg
+
+    local colors = {
+        Color3.fromRGB(255,0,0),
+        Color3.fromRGB(255,255,0),
+        Color3.fromRGB(0,255,0),
+        Color3.fromRGB(0,255,255),
+        Color3.fromRGB(0,0,255),
+        Color3.fromRGB(255,0,255)
+    }
+    local ci = 1
+    local start = tick()
+    flashConn = RunService.Heartbeat:Connect(function()
+        if tick() - start > duration then
+            flashConn:Disconnect()
+            flashConn = nil
+            pcall(function() overlay:Destroy() end)
+            return
+        end
+        ci = ci + 1
+        if ci > #colors then ci = 1 end
+        overlay.BackgroundColor3 = colors[ci]
+        overlay.BackgroundTransparency = 0.2 + math.abs(math.sin(tick()*10))*0.2
+    end)
+end
+
+-- Efekt: jemné otáčení kamery kolem postavy
+local spinConn
+function runCameraSpin(duration)
+    duration = safeDuration(duration, 6)
+    local cam = workspace.CurrentCamera
+    local origType = cam.CameraType
+    local start = tick()
+    cam.CameraType = Enum.CameraType.Scriptable
+    spinConn = RunService.RenderStepped:Connect(function()
+        local t = tick() - start
+        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local root = player.Character.HumanoidRootPart
+            local r = 5 + math.sin(t*1.5)*2
+            local ang = t * 1.5
+            local pos = root.Position + Vector3.new(math.cos(ang)*r, 2 + math.sin(t*1.2), math.sin(ang)*r)
+            cam.CFrame = CFrame.new(pos, root.Position + Vector3.new(0,1,0))
+        end
+        if tick() - start > duration then
+            if spinConn then spinConn:Disconnect() spinConn = nil end
+            cam.CameraType = origType
+        end
+    end)
+end
+
+-- Efekt: zablokuje základní vstupy (W/A/S/D, skok, LMB) po dobu duration
+function runBlockInput(duration)
+    duration = safeDuration(duration, 6)
+    local function sink() return Enum.ContextActionResult.Sink end
+    ContextActionService:BindAction(BLOCK_ACTION_NAME, sink, false,
+        Enum.KeyCode.W, Enum.KeyCode.A, Enum.KeyCode.S, Enum.KeyCode.D,
+        Enum.KeyCode.Space, Enum.UserInputType.MouseButton1)
+    delay(duration, function()
+        pcall(function() ContextActionService:UnbindAction(BLOCK_ACTION_NAME) end)
+    end)
+end
+
+-- Inicializace GUI
+createGui()
+
+-- Cleanup při opětovném respawnu GUI (nepovede duplikáty)
+player.CharacterAdded:Connect(function()
+    -- malá prodleva, aby PlayerGui existovalo
+    wait(0.5)
+    if not player.PlayerGui:FindFirstChild("LocalAdminSimGUI") then
+        createGui()
+    end
+end)
